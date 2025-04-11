@@ -1,3 +1,4 @@
+import argparse
 import backtrader as bt
 import pandas as pd
 import numpy as np
@@ -127,9 +128,9 @@ class IndexComparisonStrategy(bt.Strategy):
             self.weights_history[data._name].append(
                 (bt.num2date(self.data0.datetime[0]), weights[data._name]))
         
-        print(f"\nRebalanced on {bt.num2date(self.data0.datetime[0])}")
-        for sym, weight in sorted(weights.items()):
-            print(f"  {sym}: {weight*100:.2f}%")
+        #print(f"\nRebalanced on {bt.num2date(self.data0.datetime[0])}")
+        #for sym, weight in sorted(weights.items()):
+        #    print(f"  {sym}: {weight*100:.2f}%")
 
     def stop(self):
         
@@ -243,7 +244,7 @@ def run_strategy(data_files, start_date=None, end_date=None, output_file=None):
             )
             data._name = file.stem
             cerebro.adddata(data)
-            print(f"Added data feed for {data._name} from {file}")
+            # print(f"Added data feed for {data._name} from {file}")
         except Exception as e:
             print(f"Failed to load {file}: {str(e)}")
             return
@@ -278,20 +279,47 @@ def generate_date_strings(start_date, end_date):
     
     return date_strings
 
+def valid_date(date_string):
+    """Validate date format YYYY-MM-DD"""
+    try:
+        return datetime.strptime(date_string, "%Y-%m-%d").date()
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Invalid date: '{date_string}'. Expected format: YYYY-MM-DD")
+
 if __name__ == '__main__':
-    # Configuration - list of constituent cryptos
-    crypto_names = ['bitcoin', 'ethereum', 'cardano']
-    # Create data directory path
+    DEFAULT_START_INTERVAL0 = valid_date("2018-01-01")
+    DEFAULT_START_INTERVAL1 = valid_date("2018-12-31")
+    DEFAULT_END = valid_date("2024-12-31")
+    DEFAULT_OUTPUT = "returns.csv"
+
+    parser = argparse.ArgumentParser(description='Cryptocurrency analysis tool')
+    parser.add_argument('--cryptos', nargs='+', default=['bitcoin', 'ethereum', 'cardano'],
+                       help='List of cryptocurrencies to analyze (space-separated)')
+    parser.add_argument('--start-interval', nargs=2, type=valid_date,
+                   default=[DEFAULT_START_INTERVAL0, DEFAULT_START_INTERVAL1],
+                   metavar=('START', 'END'),
+                   help=f'Date range (default: {DEFAULT_START_INTERVAL0} to {DEFAULT_START_INTERVAL1})')
+    parser.add_argument('--end-date', type=valid_date,
+                      default=DEFAULT_END,
+                      metavar='DATE',
+                      help=f'Single end date (default: {DEFAULT_END})')
+    parser.add_argument('--output', type=str,
+                      default=DEFAULT_OUTPUT,
+                      metavar='FILENAME',
+                      help=f'Output filename (default: {DEFAULT_OUTPUT})')
+    args = parser.parse_args()
+
+    # Validate date ordering
+    if args.start_interval and args.start_interval[0] > args.start_interval[1]:
+        parser.error("Start date must be before end date")
+    if args.start_interval[1] >= args.end_date:
+            parser.error(f"start-interval end date ({args.start_interval[1]}) must be before --end-date ({args.end_date})")
+
+    print(f"Analyzing cryptocurrencies: {args.cryptos}")
+
     data_dir = Path('data')
+    data_files = [(data_dir / name).with_suffix('.csv') for name in args.cryptos]
 
-    data_files = [(data_dir / name).with_suffix('.csv') for name in crypto_names]
-
-    # data_files = [
-    #     data_dir / 'bitcoin.csv',
-    #     data_dir / 'ethereum.csv',
-    #     data_dir / 'cardano.csv', 
-    # ]
-    
     # Verify data directory exists
     if not data_dir.exists():
         print(f"\nERROR: Data directory '{data_dir}' not found")
@@ -300,19 +328,15 @@ if __name__ == '__main__':
             print(f"- {file.name}")
         exit(1)
     
-    # Set custom date range (YYYY-MM-DD format)
-    start0_date = '2018-01-01'
-    start1_date = '2018-01-31'
-    end_date = '2024-12-31'
+    # Set dates (YYYY-MM-DD format)
+    start0_date = args.start_interval[0].strftime('%Y-%m-%d')
+    start1_date = args.start_interval[1].strftime('%Y-%m-%d')
+    end_date = args.end_date.strftime('%Y-%m-%d')
     
-    start_date = '2018-02-01'
-
     dates = generate_date_strings(start0_date, start1_date)
-    with open('returns.csv', 'w') as f:
-        header = f"market_entry,index,{','.join(crypto_names)}\n"
-        # header = 'market_entry,index,bitcoin,ethereum,cardano\n' 
+    with open(args.output, 'w') as f:
+        header = f"market_entry,index,{','.join(args.cryptos)}\n"
         f.write(header)
         for date in dates:
             run_strategy(data_files, date, end_date, f)
-            # f.write(dates)
 

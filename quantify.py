@@ -1,12 +1,17 @@
+import argparse
 import csv
 from statistics import mean
+
+parser = argparse.ArgumentParser(description='Compare cryptocurrency returns against an index using using different statistics.')
+parser.add_argument('--input', default="returns.csv", help='Path to the CSV file containing analysis data (default: returns.csv)')
+args = parser.parse_args()
 
 # Initialize data structures
 data = []
 headers = []
 
 # Read the CSV file
-with open('returns.csv', 'r') as csvfile:
+with open(args.input, 'r') as csvfile:
     csvreader = csv.reader(csvfile)
     headers = next(csvreader)  # Get header row
     for row in csvreader:
@@ -55,7 +60,6 @@ for coin in headers[2:]:  # Skip date and index columns
     probability = count / len(index_returns)
     coin_probabilities[coin] = probability
 
-# Print results
 print("(1) Worst returns with corresponding days:")
 for asset, res in results.items():
     print(f"{asset}: {res['worst_return'][1]}% on {res['worst_return'][0]}")
@@ -72,5 +76,3 @@ print("\n(4) Probability of losing money (negative return):")
 for asset, res in results.items():
     print(f"{asset}: {res['prob_negative']:.2%}")
 
-# Example usage:
-# Save the CSV data to a file named 'returns.csv' and run this script

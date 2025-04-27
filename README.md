@@ -24,8 +24,10 @@ The backtesting uses historical cryptocurrency data from CoinGecko. Here's how t
    - `total_volume`: 24-hour trading volume in USD
 
 3. **File Organization**:
+
    - Place downloaded CSV files in the `data` directory
-   - Name files using the cryptocurrency's symbol (e.g., `bitcoin.csv`, `ethereum.csv`)
+   - Name files using the cryptocurrency's symbol
+   - The project comes prepopulated with some cryptocurrencies (e.g., `bitcoin.csv`, `ethereum.csv`)
 
 ## Analyze returns using backtesting
 
@@ -48,6 +50,13 @@ run with default parameters
 ```sh
 python analyze.py
 ```
+
+specify cryptocurrencies
+
+```sh
+python analyze.py --start-interval 2018-01-01 2018-01-31 --cryptos bitcoin ethereum xrp bnb sol doge cardano trx sui link
+```
+
 
 ## Visualize analysis: plot a Heat Map
 

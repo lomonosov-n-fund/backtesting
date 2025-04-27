@@ -30,8 +30,8 @@ def main():
     max_diff = comparison.abs().max().max()
     vmin, vmax = -max_diff, max_diff
 
-    FONT_SIZE = 10
-    CELL_HEIGHT_RATIO = 3
+    FONT_SIZE = 14
+    CELL_HEIGHT_RATIO = 4
     n_cryptos = len(comparison.columns)
     fig_height = (FONT_SIZE * CELL_HEIGHT_RATIO * n_cryptos) / 72
 

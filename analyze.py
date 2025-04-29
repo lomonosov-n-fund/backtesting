@@ -8,6 +8,7 @@ from pathlib import Path
 import os
 import sys
 from contextlib import redirect_stdout
+import math
 
 class CoinGeckoCSVData(bt.feeds.GenericCSVData):
     params = (
@@ -104,44 +105,47 @@ class IndexComparisonStrategy(bt.Strategy):
             self.asset_values[data._name].append(data.close[0])
 
     def rebalance_portfolio(self):
-        active_assets = [
-            data for data in self.assets 
-            if len(data) > 0 and not np.isnan(data.marketcap[0])
-        ]
+        """Rebalance portfolio based on market cap weights."""
+        # Get current date
+        current_date = self.data.datetime.date(0)
         
-        if not active_assets:
-            print(f"No active assets on {bt.num2date(self.data0.datetime[0])}")
+        # Skip if outside the specified date range
+        if self.p.start_date and current_date < self.p.start_date.date():
             return
-            
-        market_caps = {data._name: data.marketcap[0] for data in active_assets}
+        if self.p.end_date and current_date > self.p.end_date.date():
+            return
+
+        # Get market caps for assets that exist on the current date
+        market_caps = {}
+        for data in self.datas:
+            name = data._name
+            if len(data) > 0 and not math.isnan(data.lines.marketcap[0]) and data.close[0] > 0:
+                market_caps[name] = data.lines.marketcap[0]
+
+        if not market_caps:
+            return
+
+        # Calculate weights based on market cap
         total_market_cap = sum(market_caps.values())
-        
-        weights = {
-            k: max(v/total_market_cap, self.params.min_allocation) 
-            for k, v in market_caps.items()
-        }
-        total_weights = sum(weights.values())
-        weights = {k: v/total_weights for k, v in weights.items()}
-        
-        for data in active_assets:
-            self.order_target_percent(data, target=weights[data._name])
-            self.weights_history[data._name].append(
-                (bt.num2date(self.data0.datetime[0]), weights[data._name]))
-        
-        #print(f"\nRebalanced on {bt.num2date(self.data0.datetime[0])}")
-        #for sym, weight in sorted(weights.items()):
-        #    print(f"  {sym}: {weight*100:.2f}%")
+        weights = {name: cap / total_market_cap for name, cap in market_caps.items()}
+
+        # Print rebalancing info
+        print(f"\nRebalanced portfolio on {current_date}:")
+        for name, weight in weights.items():
+            print(f"  {name}: {weight:.2%}")
+
+        # Record weights for plotting
+        self.weights_history[current_date] = [(current_date, weight) for name, weight in weights.items()]
+
+        # Execute trades to match target weights
+        for data in self.datas:
+            name = data._name
+            if name in weights and data.close[0] > 0:  # Only trade if price is non-zero
+                self.order_target_percent(data, target=weights[name])
 
     def stop(self):
-        
-        # Calculate and print performance comparison
-        output = "\n=== Performance Comparison ==="
-        # if self.p.output_file:
-        #     print(output, file=self.p.output_file)
-        # else:
-        #     print(output)
-        print(output)
-        
+        """Calculate and print performance metrics."""
+        print("\n=== Performance Comparison ===")
         
         # Calculate index performance
         index_returns = np.diff(self.portfolio_value) / self.portfolio_value[:-1]
@@ -151,14 +155,31 @@ class IndexComparisonStrategy(bt.Strategy):
         
         # Calculate constituents performance
         constituent_perf = {}
-        initial_prices = {name: values[0] for name, values in self.asset_values.items()}
-        final_prices = {name: values[-1] for name, values in self.asset_values.items()}
-        
-        for name in self.asset_values:
-            total_return_asset = (final_prices[name] - initial_prices[name]) / initial_prices[name] * 100
-            returns = np.diff(self.asset_values[name]) / self.asset_values[name][:-1]
+        for name, values in self.asset_values.items():
+            # Skip assets that don't have any non-zero values
+            if all(v == 0 for v in values):
+                continue
+                
+            # Find first non-zero value as initial price
+            initial_price = next((v for v in values if v > 0), None)
+            if initial_price is None:
+                continue
+                
+            # Calculate returns only for non-zero values
+            non_zero_values = [v for v in values if v > 0]
+            if len(non_zero_values) < 2:
+                continue
+                
+            final_price = non_zero_values[-1]
+            total_return_asset = (final_price - initial_price) / initial_price * 100
+            
+            # Calculate returns array for Sharpe ratio
+            returns = np.diff(non_zero_values) / non_zero_values[:-1]
             sharpe_asset = np.sqrt(365) * returns.mean() / returns.std() if returns.std() > 0 else 0
-            max_drawdown_asset = (np.maximum.accumulate(self.asset_values[name]) - self.asset_values[name]).max() / np.maximum.accumulate(self.asset_values[name]).max() * 100
+            
+            # Calculate max drawdown
+            max_drawdown_asset = (np.maximum.accumulate(non_zero_values) - non_zero_values).max() / np.maximum.accumulate(non_zero_values).max() * 100
+            
             constituent_perf[name] = {
                 'return': total_return_asset,
                 'sharpe': sharpe_asset,
@@ -171,11 +192,10 @@ class IndexComparisonStrategy(bt.Strategy):
         for name, perf in constituent_perf.items():
             print(f"{name:<10} {perf['return']:>10.2f} {perf['sharpe']:>10.2f} {perf['drawdown']:>10.2f}")
 
-        values = [self.p.start_date.strftime('%Y-%m-%d')] + [f"{total_return:.2f}"] + [f"{perf['return']:.2f}" for perf in constituent_perf.values()]
-        print(",".join(values), file=self.p.output_file)
-
-        # Plot comparison
-        # self.plot_comparison()
+        # Write results to output file
+        if self.p.output_file:
+            values = [self.p.start_date.strftime('%Y-%m-%d')] + [f"{total_return:.2f}"] + [f"{perf['return']:.2f}" for perf in constituent_perf.values()]
+            print(",".join(values), file=self.p.output_file)
 
     def plot_comparison(self):
         plt.style.use('ggplot')
@@ -317,15 +337,13 @@ if __name__ == '__main__':
 
     print(f"Analyzing cryptocurrencies: {args.cryptos}")
 
-    data_dir = Path('data')
+    data_dir = Path('data/normalized')
     data_files = [(data_dir / name).with_suffix('.csv') for name in args.cryptos]
 
     # Verify data directory exists
     if not data_dir.exists():
-        print(f"\nERROR: Data directory '{data_dir}' not found")
-        print("Please create a 'data' directory and add your CSV files:")
-        for file in data_files:
-            print(f"- {file.name}")
+        print(f"\nERROR: Normalized data directory '{data_dir}' not found")
+        print("Please run normalize_data.py first to create normalized data files")
         exit(1)
     
     # Set dates (YYYY-MM-DD format)
@@ -335,8 +353,11 @@ if __name__ == '__main__':
     
     dates = generate_date_strings(start0_date, start1_date)
     with open(args.output, 'w') as f:
+        # Write header
         header = f"market_entry,index,{','.join(args.cryptos)}\n"
         f.write(header)
+        
+        # Run strategy for each date
         for date in dates:
             run_strategy(data_files, date, end_date, f)
 

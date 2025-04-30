@@ -8,6 +8,19 @@ The project backtests a market-cap weighted indexing strategy that:
 - Rebalances the portfolio every 30 days
 - Implements a minimum allocation threshold of 1% per asset
 
+## Demonstrations
+
+### 2017 bull run
+
+Consider top performers of that time: bitcoin (btc), ethereum (eth),  ripple (xrp), bitcoin cash (bch), litecoin (ltc), Cardano (ada), iota, dash, nem (xem), monero (xmr)
+
+```sh
+python analyze.py --start-interval 2017-12-01 2018-01-31 --end-date 2024-12-31 --cryptos btc eth bch xrp ltc ada iota dash xem xmr
+python visualize.py --output demo1.png
+python quantify.py
+```
+![Demo 1: Backtesting results for BTC, ETH, XRP from Dec 2017 to Dec 2024](demo1.png)
+
 ## Data Preparation
 
 The backtesting uses historical cryptocurrency data from CoinGecko. Here's how to prepare the data:
@@ -28,6 +41,12 @@ The backtesting uses historical cryptocurrency data from CoinGecko. Here's how t
    - Place downloaded CSV files in the `data` directory
    - Name files using the cryptocurrency's symbol
    - The project comes prepopulated with some cryptocurrencies (e.g., `bitcoin.csv`, `ethereum.csv`)
+
+4. **Normalize Data**
+
+Ensures consistent historical data coverage by adding zero values for cryptocurrencies during periods before they existed.
+
+`python normalize_data.py --start-date 2013-01-01`
 
 ## Analyze returns using backtesting
 

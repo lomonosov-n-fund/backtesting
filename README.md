@@ -21,6 +21,8 @@ python quantify.py
 ```
 ![Demo 1: Backtesting results for BTC, ETH, XRP from Dec 2017 to Dec 2024](demo1.png)
 
+See [Statistics](demo1.md) for details
+
 ## Data Preparation
 
 The backtesting uses historical cryptocurrency data from CoinGecko. Here's how to prepare the data:
@@ -106,6 +108,7 @@ run with default arguments
 
 - `-h, --help`  show help message and exit
 - `--input FILENAME` input CSV filename (default: returns.csv)
+- `--output FILENAME` output Markdown-formatted statical tables
 
 ### Examples
 

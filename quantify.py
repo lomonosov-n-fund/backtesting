@@ -4,6 +4,7 @@ from statistics import mean
 
 parser = argparse.ArgumentParser(description='Compare cryptocurrency returns against an index using using different statistics.')
 parser.add_argument('--input', default="returns.csv", help='Path to the CSV file containing analysis data (default: returns.csv)')
+parser.add_argument('--output', help='Path to the output Markdown file (if not specified, prints to stdout)')
 args = parser.parse_args()
 
 # Initialize data structures
@@ -60,19 +61,45 @@ for coin in headers[2:]:  # Skip date and index columns
     probability = count / len(index_returns)
     coin_probabilities[coin] = probability
 
-print("(1) Worst returns with corresponding days:")
-for asset, res in results.items():
-    print(f"{asset}: {res['worst_return'][1]}% on {res['worst_return'][0]}")
+def write_results(output_file):
+    if output_file:
+        # Write results to Markdown file
+        with open(output_file, 'w') as md_file:
+            # Write header and tables
+            md_file.write("# Cryptocurrency Performance Analysis\n\n")
+            
+            # Table 1: Worst Returns
+            md_file.write("## Worst Returns\n\n")
+            md_file.write("| Asset | Worst Return (%) | Date |\n")
+            md_file.write("|-------|-----------------|------|\n")
+            for asset, res in results.items():
+                md_file.write(f"| {asset} | {res['worst_return'][1]:.2f} | {res['worst_return'][0]} |\n")
+            
+            # Table 2: Average Returns and Probabilities
+            md_file.write("\n## Performance Statistics\n\n")
+            md_file.write("| Asset | Average Return (%) | P(Return < Index) | P(Negative Return) |\n")
+            md_file.write("|-------|-------------------|-------------------|---------------------|\n")
+            for asset, res in results.items():
+                prob_less_than_index = coin_probabilities.get(asset, 0)
+                md_file.write(f"| {asset} | {res['average_return']:.2f} | {prob_less_than_index:.2%} | {res['prob_negative']:.2%} |\n")
+        print(f"Analysis results written to {output_file}")
+    else:
+        # Print results to stdout in original format
+        print("(1) Worst returns with corresponding days:")
+        for asset, res in results.items():
+            print(f"{asset}: {res['worst_return'][1]}% on {res['worst_return'][0]}")
 
-print("\n(2) Average returns:")
-for asset, res in results.items():
-    print(f"{asset}: {res['average_return']:.2f}%")
+        print("\n(2) Average returns:")
+        for asset, res in results.items():
+            print(f"{asset}: {res['average_return']:.2f}%")
 
-print("\n(3) Probability that return is smaller than index:")
-for coin, prob in coin_probabilities.items():
-    print(f"{coin}: {prob:.2%}")
+        print("\n(3) Probability that return is smaller than index:")
+        for coin, prob in coin_probabilities.items():
+            print(f"{coin}: {prob:.2%}")
 
-print("\n(4) Probability of losing money (negative return):")
-for asset, res in results.items():
-    print(f"{asset}: {res['prob_negative']:.2%}")
+        print("\n(4) Probability of losing money (negative return):")
+        for asset, res in results.items():
+            print(f"{asset}: {res['prob_negative']:.2%}")
+
+write_results(args.output)
 

@@ -65,14 +65,15 @@ def normalize_data(raw_dir, normalized_dir, start_date):
             
             # Create DataFrame with zero values
             zero_data = pd.DataFrame({
-                'snapped_at': [f"{date} 00:00:00 UTC" for date in dates],
+                'snapped_at': [date.isoformat() for date in dates],  # Use YYYY-MM-DD format
                 'price': [0.0] * len(dates),
                 'market_cap': [0.0] * len(dates),
                 'total_volume': [0.0] * len(dates)
             })
             
-            # Read existing data
+            # Read existing data and convert dates to YYYY-MM-DD format
             existing_data = pd.read_csv(csv_file)
+            existing_data['snapped_at'] = pd.to_datetime(existing_data['snapped_at']).dt.date.astype(str)
             
             # Combine and write to normalized directory
             combined_data = pd.concat([zero_data, existing_data], ignore_index=True)

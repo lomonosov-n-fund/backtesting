@@ -2,8 +2,7 @@ import argparse
 import backtrader as bt
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 import os
 import sys
@@ -12,8 +11,8 @@ import math
 
 class CoinGeckoCSVData(bt.feeds.GenericCSVData):
     params = (
-        ('dtformat', '%Y-%m-%d %H:%M:%S UTC'),
-        ('datetime', 0),     # snapped_at column
+        ('dtformat', '%Y-%m-%d'),  # Date format in normalized files
+        ('datetime', 0),     # date column
         ('open', 1),        # price
         ('high', 1),        # price (same as open)
         ('low', 1),         # price (same as open)
@@ -27,22 +26,15 @@ class CoinGeckoCSVData(bt.feeds.GenericCSVData):
     def __init__(self, **kwargs):
         super(CoinGeckoCSVData, self).__init__(**kwargs)
         self._debug = False
-        self._loaded_lines = 0
 
     def _loadline(self, linetokens):
         ret = super(CoinGeckoCSVData, self)._loadline(linetokens)
-        if ret:
-            self._loaded_lines += 1
-            if self._debug and self._loaded_lines <= 5:
-                dt = bt.num2date(self.lines.datetime[0])
-                print(f"\nLine {self._loaded_lines}:")
-                print(f"  Date: {dt}")
-                print(f"  Open: {self.lines.open[0]}")
-                print(f"  Market Cap: {self.lines.marketcap[0]}")
+        if ret and self._debug:
+            dt = bt.num2date(self.lines.datetime[0]).date()
+            print(f"Date: {dt}, Open: {self.lines.open[0]}, Market Cap: {self.lines.marketcap[0]}")
         return ret
 
     def load(self):
-        self._loaded_lines = 0
         num_points = super(CoinGeckoCSVData, self).load()
         if self._debug:
             print(f"\nTotal loaded points: {num_points}")
@@ -69,11 +61,11 @@ class IndexComparisonStrategy(bt.Strategy):
         self.day_counter = 0
         self.assets = self.datas  # All data feeds are constituents
         
-        # Convert dates to datetime objects
+        # Convert dates to date objects
         if isinstance(self.p.start_date, str):
-            self.start_date = datetime.strptime(self.p.start_date, '%Y-%m-%d')
+            self.start_date = date.fromisoformat(self.p.start_date)
         if isinstance(self.p.end_date, str):
-            self.end_date = datetime.strptime(self.p.end_date, '%Y-%m-%d')
+            self.end_date = date.fromisoformat(self.p.end_date)
         
         # Track portfolio and individual asset values
         self.portfolio_value = []
@@ -86,12 +78,12 @@ class IndexComparisonStrategy(bt.Strategy):
     #     self.portfolio_value.append(self.broker.getvalue())
 
     def next(self):
-        current_dt = bt.num2date(self.data0.datetime[0])
+        current_date = bt.num2date(self.data0.datetime[0]).date()
         
         # Skip if before start date or after end date
-        if self.p.start_date and current_dt < self.p.start_date:
+        if self.p.start_date and current_date < self.p.start_date:
             return
-        if self.p.end_date and current_dt > self.p.end_date:
+        if self.p.end_date and current_date > self.p.end_date:
             return
             
         self.day_counter += 1
@@ -99,7 +91,7 @@ class IndexComparisonStrategy(bt.Strategy):
             self.rebalance_portfolio()
         
         # Record daily values for comparison
-        self.dates.append(current_dt)
+        self.dates.append(current_date)
         self.portfolio_value.append(self.broker.getvalue())
         for data in self.assets:
             self.asset_values[data._name].append(data.close[0])
@@ -107,12 +99,12 @@ class IndexComparisonStrategy(bt.Strategy):
     def rebalance_portfolio(self):
         """Rebalance portfolio based on market cap weights."""
         # Get current date
-        current_date = self.data.datetime.date(0)
+        current_date = bt.num2date(self.data0.datetime[0]).date()
         
         # Skip if outside the specified date range
-        if self.p.start_date and current_date < self.p.start_date.date():
+        if self.p.start_date and current_date < self.p.start_date:
             return
-        if self.p.end_date and current_date > self.p.end_date.date():
+        if self.p.end_date and current_date > self.p.end_date:
             return
 
         # Get market caps for assets that exist on the current date
@@ -194,39 +186,8 @@ class IndexComparisonStrategy(bt.Strategy):
 
         # Write results to output file
         if self.p.output_file:
-            values = [self.p.start_date.strftime('%Y-%m-%d')] + [f"{total_return:.2f}"] + [f"{perf['return']:.2f}" for perf in constituent_perf.values()]
+            values = [self.p.start_date.isoformat()] + [f"{total_return:.2f}"] + [f"{perf['return']:.2f}" for perf in constituent_perf.values()]
             print(",".join(values), file=self.p.output_file)
-
-    def plot_comparison(self):
-        plt.style.use('ggplot')
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), gridspec_kw={'height_ratios': [3, 1]})
-        
-        # Normalize all prices to starting value of 100
-        norm_index = [100 * x / self.portfolio_value[0] for x in self.portfolio_value]
-        ax1.plot(self.dates, norm_index, label='Index', linewidth=2.5)
-        
-        # Plot constituents
-        for name, values in self.asset_values.items():
-            norm_values = [100 * x / values[0] for x in values]
-            ax1.plot(self.dates, norm_values, label=name, alpha=0.7)
-        
-        ax1.set_title('Performance Comparison: Index vs Constituents')
-        ax1.set_ylabel('Normalized Value (Start=100)')
-        ax1.legend()
-        ax1.grid(True)
-        
-        # Plot weights evolution
-        for name, weights in self.weights_history.items():
-            dates = [x[0] for x in weights]
-            values = [x[1]*100 for x in weights]
-            ax2.plot(dates, values, label=name, alpha=0.7)
-        
-        ax2.set_title('Asset Weights Evolution')
-        ax2.set_ylabel('Weight (%)')
-        ax2.grid(True)
-        
-        plt.tight_layout()
-        plt.show()
 
 def run_strategy(data_files, start_date=None, end_date=None, output_file=None):
     """Run strategy and write output to file handle or stdout."""
@@ -236,11 +197,11 @@ def run_strategy(data_files, start_date=None, end_date=None, output_file=None):
 
     cerebro = bt.Cerebro()
     
-    # Convert string dates to datetime objects
+    # Convert string dates to date objects if needed
     if isinstance(start_date, str):
-        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        start_date = date.fromisoformat(start_date)
     if isinstance(end_date, str):
-        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+        end_date = date.fromisoformat(end_date)
     
     # Add strategy with date range
     cerebro.addstrategy(
@@ -264,7 +225,6 @@ def run_strategy(data_files, start_date=None, end_date=None, output_file=None):
             )
             data._name = file.stem
             cerebro.adddata(data)
-            # print(f"Added data feed for {data._name} from {file}")
         except Exception as e:
             print(f"Failed to load {file}: {str(e)}")
             return
@@ -287,14 +247,14 @@ def run_strategy(data_files, start_date=None, end_date=None, output_file=None):
 
 def generate_date_strings(start_date, end_date):
     """Generate date strings between two dates (inclusive)"""
-    start = datetime.strptime(start_date, '%Y-%m-%d')
-    end = datetime.strptime(end_date, '%Y-%m-%d')
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
     
     current = start
     date_strings = []
     
     while current <= end:
-        date_strings.append(current.strftime('%Y-%m-%d'))
+        date_strings.append(current.isoformat())
         current += timedelta(days=1)
     
     return date_strings
@@ -302,7 +262,7 @@ def generate_date_strings(start_date, end_date):
 def valid_date(date_string):
     """Validate date format YYYY-MM-DD"""
     try:
-        return datetime.strptime(date_string, "%Y-%m-%d").date()
+        return date.fromisoformat(date_string)
     except ValueError:
         raise argparse.ArgumentTypeError(f"Invalid date: '{date_string}'. Expected format: YYYY-MM-DD")
 
@@ -346,12 +306,13 @@ if __name__ == '__main__':
         print("Please run normalize_data.py first to create normalized data files")
         exit(1)
     
-    # Set dates (YYYY-MM-DD format)
-    start0_date = args.start_interval[0].strftime('%Y-%m-%d')
-    start1_date = args.start_interval[1].strftime('%Y-%m-%d')
-    end_date = args.end_date.strftime('%Y-%m-%d')
+    # Generate dates between start and end of interval
+    dates = []
+    current_date = args.start_interval[0]
+    while current_date <= args.start_interval[1]:
+        dates.append(current_date)
+        current_date += timedelta(days=1)
     
-    dates = generate_date_strings(start0_date, start1_date)
     with open(args.output, 'w') as f:
         # Write header
         header = f"market_entry,index,{','.join(args.cryptos)}\n"
@@ -359,5 +320,5 @@ if __name__ == '__main__':
         
         # Run strategy for each date
         for date in dates:
-            run_strategy(data_files, date, end_date, f)
+            run_strategy(data_files, date, args.end_date, f)
 

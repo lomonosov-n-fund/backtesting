@@ -1,13 +1,9 @@
 import argparse
 import backtrader as bt
-import pandas as pd
 import numpy as np
 from datetime import date, timedelta
 from pathlib import Path
-import os
 import sys
-from contextlib import redirect_stdout
-import math
 
 class CoinGeckoCSVData(bt.feeds.GenericCSVData):
     params = (
@@ -71,11 +67,6 @@ class IndexComparisonStrategy(bt.Strategy):
         self.portfolio_value = []
         self.asset_values = {data._name: [] for data in self.assets}
         self.dates = []
-        self.weights_history = {data._name: [] for data in self.assets}
-
-    # def start(self):
-    #     # Record initial portfolio value
-    #     self.portfolio_value.append(self.broker.getvalue())
 
     def next(self):
         current_date = bt.num2date(self.data0.datetime[0]).date()
@@ -111,7 +102,8 @@ class IndexComparisonStrategy(bt.Strategy):
         market_caps = {}
         for data in self.datas:
             name = data._name
-            if len(data) > 0 and not math.isnan(data.lines.marketcap[0]) and data.close[0] > 0:
+            
+            if len(data) > 0 and data.close[0] > 0:
                 market_caps[name] = data.lines.marketcap[0]
 
         if not market_caps:
@@ -125,9 +117,6 @@ class IndexComparisonStrategy(bt.Strategy):
         print(f"\nRebalanced portfolio on {current_date}:")
         for name, weight in weights.items():
             print(f"  {name}: {weight:.2%}")
-
-        # Record weights for plotting
-        self.weights_history[current_date] = [(current_date, weight) for name, weight in weights.items()]
 
         # Execute trades to match target weights
         for data in self.datas:
@@ -241,23 +230,6 @@ def run_strategy(data_files, start_date=None, end_date=None, output_file=None):
     print('\nStarting Portfolio Value: %.2f' % cerebro.broker.getvalue())
     results = cerebro.run()
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    
-    # Plot
-    # cerebro.plot(style='candlestick')
-
-def generate_date_strings(start_date, end_date):
-    """Generate date strings between two dates (inclusive)"""
-    start = date.fromisoformat(start_date)
-    end = date.fromisoformat(end_date)
-    
-    current = start
-    date_strings = []
-    
-    while current <= end:
-        date_strings.append(current.isoformat())
-        current += timedelta(days=1)
-    
-    return date_strings
 
 def valid_date(date_string):
     """Validate date format YYYY-MM-DD"""

@@ -17,7 +17,7 @@ Consider top performers of that time: bitcoin (btc), ethereum (eth),  ripple (xr
 ```sh
 python analyze.py --start-interval 2017-12-01 2018-01-31 --end-date 2024-12-31 --cryptos btc eth bch xrp ltc ada iota dash xem xmr
 python visualize.py --output demo1.png
-python quantify.py
+python quantify.py --output demo1.md
 ```
 ![Demo 1: Backtesting results for BTC, ETH, XRP from Dec 2017 to Dec 2024](demo1.png)
 

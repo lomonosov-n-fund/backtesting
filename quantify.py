@@ -65,23 +65,15 @@ def write_results(output_file):
     if output_file:
         # Write results to Markdown file
         with open(output_file, 'w') as md_file:
-            # Write header and tables
-            md_file.write("# Cryptocurrency Performance Analysis\n\n")
+            # Write header and table
+            md_file.write("# Анализ эффективности криптовалют\n\n")
             
-            # Table 1: Worst Returns
-            md_file.write("## Worst Returns\n\n")
-            md_file.write("| Asset | Worst Return (%) | Date |\n")
-            md_file.write("|-------|-----------------|------|\n")
-            for asset, res in results.items():
-                md_file.write(f"| {asset} | {res['worst_return'][1]:.2f} | {res['worst_return'][0]} |\n")
-            
-            # Table 2: Average Returns and Probabilities
-            md_file.write("\n## Performance Statistics\n\n")
-            md_file.write("| Asset | Average Return (%) | P(Return < Index) | P(Negative Return) |\n")
-            md_file.write("|-------|-------------------|-------------------|---------------------|\n")
+            # Combined table with all statistics
+            md_file.write("| Актив | Худший<br>возврат, % | Усредненный<br>возврат, % | Вероятность<br>победы<br>индексной<br>стратегии, % | Вероятность<br>негативного<br>возврата, % |\n")
+            md_file.write("|-------|-----------------|-------------------|-------------------|---------------------|\n")
             for asset, res in results.items():
                 prob_less_than_index = coin_probabilities.get(asset, 0)
-                md_file.write(f"| {asset} | {res['average_return']:.2f} | {prob_less_than_index:.2%} | {res['prob_negative']:.2%} |\n")
+                md_file.write(f"| {asset} | {res['worst_return'][1]:.2f} | {res['average_return']:.2f} | {prob_less_than_index:.2%} | {res['prob_negative']:.2%} |\n")
         print(f"Analysis results written to {output_file}")
     else:
         # Print results to stdout in original format
